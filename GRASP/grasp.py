@@ -8,21 +8,34 @@ def grasp(alpha, maxIteration):
     bestSolution = {'gc': sys.maxint}
     iteration = 1
     while iteration <= maxIteration:
+        print(iteration)
         solution = construct(alpha)
-        bestNeighbour = local(solution)
-        if (bestNeighbour['gc'] < bestSolution['gc']):
-
-            # if feasible => update best solution
-            bestSolution = bestNeighbour
+        if solution['feasible']:
+            '''
             print('it', iteration)
             print('gc')
-            pprint.pprint(bestSolution['gc'])
+            pprint.pprint(solution['gc'])
             print('assignedNurses')
-            pprint.pprint(bestSolution['assignedNurses'])
+            pprint.pprint(solution['assignedNurses'])
             print('workedHours')
-            pprint.pprint(bestSolution['workedHours'])
+            pprint.pprint(solution['workedHours'])
             print('schedule')
-            pprint.pprint(bestSolution['schedule'])
+            pprint.pprint(solution['schedule'])
+            '''
+            # if feasible => check for other solutions
+            bestNeighbour = local(solution)
+            # bestNeighbour = solution
+            if (bestNeighbour['gc'] < bestSolution['gc']):
+                bestSolution = bestNeighbour
+                print('it', iteration)
+                print('gc')
+                pprint.pprint(bestSolution['gc'])
+                print('assignedNurses')
+                pprint.pprint(bestSolution['assignedNurses'])
+                print('workedHours')
+                pprint.pprint(bestSolution['workedHours'])
+                print('schedule')
+                pprint.pprint(bestSolution['schedule'])
 
         iteration += 1
     return bestSolution
@@ -33,11 +46,19 @@ def construct(alpha):
     solution = {'schedule': [[0] * data['hours'] for i in range(
         data['numNurses'])],
         'gc': 0,
+        'feasible': True,
         'assignedNurses': [0] * data['hours'],
         'workedHours': [0] * data['numNurses']}
 
+    firstIteration = True
+    lastNurse = -1
+    lastHour = -1
     while not demandFulfilled(solution, data['demand']) and candidates:
-        greedyCost(candidates, solution)
+        greedyCost(candidates, solution, firstIteration, lastNurse, lastHour)
+        candidates = list(
+            filter(lambda candidate: candidate['gc'] < 900, candidates))
+        if len(candidates) == 0:
+            break
         sortedCandidates = sorted(
             candidates, key=lambda candidate: candidate['gc'])
         minGreedyCost = sortedCandidates[0]['gc']
@@ -52,27 +73,31 @@ def construct(alpha):
         solution['schedule'][selectedNurse][selectedHour] = 1
         solution['assignedNurses'][selectedHour] += 1
         solution['workedHours'][selectedNurse] += 1
+        lastNurse = selectedNurse
+        lastHour = selectedHour
         updateSolutions(candidates, randomSelectedCandidate)
+        firstIteration = False
 
     computeSolutionCost(solution)
     return solution
 
 
-def computeSolutionCost(solution):
-    lambdaNurse = 200
-    lambdaOverDemand = 20
-
-    # CHECK FEASIBILITY
+def checkFeasible(solution):
     if max(solution['workedHours']) > data['maxHours']:
-        solution['gc'] = sys.maxint
+        solution['feasible'] = False
         return
 
     for workingHour in solution['workedHours']:
         if workingHour > 0 and workingHour < data['minHours']:
-            solution['gc'] = sys.maxint
+            solution['feasible'] = False
             break
 
-    if solution['gc'] == sys.maxint:
+    for index, demand in enumerate(solution['assignedNurses']):
+        if demand < data['demand'][index]:
+            solution['feasible'] = False
+            break
+
+    if not solution['feasible']:
         return
 
     for nurse in solution['schedule']:
@@ -80,28 +105,51 @@ def computeSolutionCost(solution):
         lastHour = -1
         consec = 0
         maxConsec = 0
+        worksBefore = False
+        rests = 0
         for hour, works in enumerate(nurse):
             if works:
                 consec += 1
+                if not worksBefore:
+                    worksBefore = True
+
+                if maxConsec < consec:
+                    maxConsec = consec
+
                 if hour < firstHour:
                     firstHour = hour
 
-                elif hour > lastHour:
+                if hour > lastHour:
                     lastHour = hour
+
+                if worksBefore and rests > 1:
+                    solution['feasible'] = False
+                    break
+
+                rests = 0
             else:
-                if maxConsec < consec:
-                    maxConsec = consec
+                rests += worksBefore * 1
                 consec = 0
 
         if maxConsec > data['maxConsec']:
-            solution['gc'] = sys.maxint
+            solution['feasible'] = False
             break
 
         if lastHour != -1 and (lastHour + 1 - firstHour) > data['maxPresence']:
-            solution['gc'] = sys.maxint
+            solution['feasible'] = False
             break
 
-    if solution['gc'] == sys.maxint:
+    if not solution['feasible']:
+        return
+
+
+def computeSolutionCost(solution):
+    lambdaNurse = 200
+    lambdaOverDemand = 20
+
+    # CHECK FEASIBILITY
+    checkFeasible(solution)
+    if not solution['feasible']:
         return
 
     # END CHECK FEASIBILITY
@@ -140,45 +188,32 @@ def computeCandidateElements():
     return solutions
 
 
-def greedyCost(solutions, schedule):
-    lambdaNewNurse = 400
-    lambdaMaxConsec = 1500
-    lambdaMinHours = 150
-    lambdaMaxHours = 1500
-    lambdaMaxPresence = 1500
-    lambdaMaxRest = 1500
-    lambdaDemandAdjustment = 20
-    lambdaOverDemand = 100
+def greedyCost(solutions, schedule, firstIteration, lastNurse, lastHour):
+    lambdaNewNurse = 200
+    lambdaMaxConsec = 1000
+    lambdaMinHours = 50
+    lambdaMaxHours = 1000
+    lambdaMaxPresence = 1000
+    lambdaMaxRest = 100
+    lambdaDemandAdjustment = 10
+    lambdaOverDemand = 50
 
     for solution in solutions:
+        if not firstIteration and (solution['nurse'] != lastNurse
+                                   and solution['hour'] != lastHour):
+            continue
+        nurseWorkedHours = schedule['workedHours'][solution['nurse']]
         # New Nurse
-        solution['gc'] = lambdaNewNurse * \
-            (schedule['workedHours'][solution['nurse']] < 1)
+        solution['gc'] = lambdaNewNurse * (nurseWorkedHours < 1)
 
         # Min Hours
-        solution['gc'] -= lambdaMinHours * \
-            ((schedule['workedHours'][solution['nurse']] + 1) <
-             data['minHours'])
-        # * (data['minHours'] - (schedule['workedHours'][solution['nurse']] ))
+        solution['gc'] -= lambdaMinHours * (nurseWorkedHours <
+                                            data['minHours'])
 
         # Max hours
         solution['gc'] += lambdaMaxHours * \
-            (schedule['workedHours'][solution['nurse']] + 1 >
+            ((nurseWorkedHours + 1) >
              min(data['maxHours'], data['maxPresence']))
-
-        # Cost regarding hour demand
-        maxRemainingDemand = [demand - assigned for demand,
-                              assigned in zip(data['demand'],
-                                              schedule['assignedNurses'])]
-        
-        maxRemainingDemand[solution['hour']] -= 1
-        
-        solution['gc'] += (maxRemainingDemand[solution['hour']] <= 0) * \
-            lambdaOverDemand
-
-        solution['gc'] -= lambdaDemandAdjustment * \
-            abs(max(maxRemainingDemand) -
-                schedule['assignedNurses'][solution['hour']])
 
         # Max Presence
         solution['gc'] += lambdaMaxPresence * \
@@ -186,7 +221,9 @@ def greedyCost(solutions, schedule):
 
         # Max Consec
         consec = 0
-        for indexHour, workingHour in enumerate(schedule['schedule'][solution['nurse']]):
+        nurseSchedule = schedule['schedule'][solution['nurse']]
+
+        for indexHour, workingHour in enumerate(nurseSchedule):
             if not workingHour:
                 if indexHour < solution['hour']:
                     consec = 0
@@ -196,9 +233,34 @@ def greedyCost(solutions, schedule):
                     break
             else:
                 consec += 1
+
         solution['gc'] += lambdaMaxConsec * (consec > data['maxConsec'])
 
         # MaxRest
+        restingHoursBetween = 0
+        hour = solution['hour']
+        while (hour < data['hours']):
+            if nurseSchedule[hour] == 1:
+                restingHoursBetween = hour - solution['hour'] - 1
+                break
+            hour += 1
+        hour = solution['hour']
+        while (hour >= 0):
+            if nurseSchedule[hour] == 1:
+                restingHoursBetween = max(
+                    solution['hour'] - hour - 1, restingHoursBetween)
+                break
+            hour -= 1
+
+        solution['gc'] += lambdaMaxRest * (restingHoursBetween > 1)
+
+        # Cost regarding hour demand
+        maxRemainingDemand = [demand - assigned for demand,
+                              assigned in zip(data['demand'],
+                                              schedule['assignedNurses'])]
+
+        solution['gc'] += (maxRemainingDemand[solution['hour']] <= 0) * \
+            lambdaOverDemand
 
     return
 
@@ -212,7 +274,7 @@ def computeMaxPresence(schedule, solution):
             if hour < firstHour:
                 firstHour = hour
 
-            elif hour > lastHour:
+            if hour > lastHour:
                 lastHour = hour
 
     if firstHour > data['hours'] or lastHour == -1:
@@ -227,11 +289,24 @@ def computeMaxPresence(schedule, solution):
 
 
 def local(solution):
+    for idNurse, nurseSchedule in enumerate(solution['schedule']):
+        for idHour, worksInHour in enumerate(nurseSchedule):
+            if worksInHour == 1:
+                solution['schedule'][idNurse][idHour] = 0
+                solution['workedHours'][idNurse] -= 1
+                solution['assignedNurses'][idHour] -= 1
+                computeSolutionCost(solution)
+                if not solution['feasible']:
+                    solution['schedule'][idNurse][idHour] = 1
+                    solution['workedHours'][idNurse] += 1
+                    solution['assignedNurses'][idHour] += 1
+                    solution['feasible'] = True
+
     return solution
 
 
 def main():
-    alpha = 0.1
+    alpha = 0.0
     maxIte = 1000
     grasp(alpha, maxIte)
 
