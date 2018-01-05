@@ -1,6 +1,7 @@
 # imports
 import math
 import matplotlib.pyplot as plt
+import pprint
 
 import BRKGA as brkga  # BRKGA framework (problem independent)
 import DECODER_DUMMY as decoder  # Dgcoder algorithm (problem-dependent)
@@ -8,15 +9,15 @@ import DECODER_DUMMY as decoder  # Dgcoder algorithm (problem-dependent)
 from DATA_DUMMY import data
 # Configuration parameters (problem-dependent and execution-dependent)
 from CONFIGURATION import config
-import pprint
-print config
+
+print(config)
 # initializations
 numIndividuals = int(config['numIndividuals'])
 chrLength = int(config['chromosomeLength'])
 numElite = int(math.ceil(numIndividuals * config['eliteProp']))
 numMutants = int(math.ceil(numIndividuals * config['mutantProp']))
 numCrossover = max(numIndividuals - numElite - numMutants, 0)
-maxNumGen = int(config['maxNumGen'])
+maxNumGenerations = int(config['maxNumGenerations'])
 ro = float(config['inheritanceProb'])
 evol = []
 
@@ -25,9 +26,10 @@ evol = []
 population = brkga.initializePopulation(numIndividuals, chrLength)
 
 i = 0
-while (i < maxNumGen):
+while i < maxNumGenerations:
     population = decoder.decode(population, data)
-    evol.append(brkga.getBestFitness(population)['fitness'])
+    bestfit = brkga.getBestFitness(population)['fitness']
+    evol.append(bestfit)
     if numElite > 0:
         elite, nonelite = brkga.classifyIndividuals(population, numElite)
     else:
@@ -47,7 +49,6 @@ while (i < maxNumGen):
 population = decoder.decode(population, data)
 bestIndividual = brkga.getBestFitness(population)
 
-#pprint.pprint(bestIndividual['solution'])
 
 usedNurses = [0]*data['hours']
 nursesPresence = [0]*data['numNurses']
@@ -62,11 +63,12 @@ for idNurse, nurse in enumerate(bestIndividual['solution']):
                 minWorkingHour = idHour
         usedNurses[idHour] += hour
         nursesPresence[idNurse] = max(maxWorkingHour - minWorkingHour + 1, 0)
-    print 'Nurse ' + str(idNurse) + ' works: ' + ', '.join(map(str, nurse)) + '  Presence: ' + str(nursesPresence[idNurse]) + ' (Total ' + str(sum(nurse)) + 'h)' 
+    print('Nurse {:>2} works: {} Presence: {:2}  (Total {}h)'
+          .format(str(idNurse), ', '.join(map(str, nurse)), str(nursesPresence[idNurse]), str(sum(nurse))))
 
-print 'Demand: ' + str(data['demand'])
-print 'Assigned: ' + str(usedNurses)
-print bestIndividual['fitness']
+print('Demand:        ' + str(data['demand']))
+print('Assigned:      ' + str(usedNurses))
+print(bestIndividual['fitness'])
 
 plt.plot(evol)
 plt.xlabel('number of generations')
