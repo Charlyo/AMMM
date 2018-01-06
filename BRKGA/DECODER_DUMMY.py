@@ -31,32 +31,36 @@ def decode(population, data):
         minWorkingHours = [-1] * data['numNurses']
         maxWorkingHours = [-1] * data['numNurses']
 
-        for currHour in range(data['hours']):
+        for curr_hour in range(data['hours']):
             id_nurse = 0
-            while data['demand'][currHour] > assignedDemand[currHour] and id_nurse < len(sortedIndChr):  # while the demand is not satisfied
+            while data['demand'][curr_hour] > assignedDemand[curr_hour] and id_nurse < len(sortedIndChr):  # while the demand is not satisfied
                 curr_nurse = sortedIndChr[id_nurse][0]
                 hours_worked = workedHours[curr_nurse]
                 consec_hours_worked = workedConsec[curr_nurse]
                 min_worked_hours = minWorkingHours[curr_nurse]
+                current_schedule = []
+                current_schedule = list(ind['solution'][curr_nurse])  # creates a copy of the current nurse
+                current_schedule[curr_hour] = 1
 
                 if (hours_worked < maxHours
                         and consec_hours_worked < maxConsec
-                        and (min_worked_hours == -1 or ((currHour + 1 - min_worked_hours) <= maxPresence))
-                        and sortedIndChr[id_nurse][1][1] > 0.5):
+                        and (min_worked_hours == -1 or ((curr_hour + 1 - min_worked_hours) <= maxPresence))
+                        and sortedIndChr[id_nurse][1][1] > 0.7
+                        and consecutiveRests([current_schedule], data) == 0):
 
                     if minWorkingHours[curr_nurse] == -1:
-                        minWorkingHours[curr_nurse] = currHour
+                        minWorkingHours[curr_nurse] = curr_hour
 
-                    if maxWorkingHours[curr_nurse] < currHour:
-                        maxWorkingHours[curr_nurse] = currHour
+                    if maxWorkingHours[curr_nurse] < curr_hour:
+                        maxWorkingHours[curr_nurse] = curr_hour
 
                     workedHours[curr_nurse] += 1
-                    ind['solution'][curr_nurse][currHour] += 1
-                    assignedDemand[currHour] += 1
+                    ind['solution'][curr_nurse][curr_hour] += 1
+                    assignedDemand[curr_hour] += 1
 
                     # Aquest if funca perque les hores son correlatives
-                    worksPreviousHour = ind['solution'][curr_nurse][currHour - 1]
-                    if currHour > 0 and worksPreviousHour:
+                    worksPreviousHour = ind['solution'][curr_nurse][curr_hour - 1]
+                    if curr_hour > 0 and worksPreviousHour:
                         workedConsec[curr_nurse] += 1
                     else:
                         workedConsec[curr_nurse] = 1
@@ -76,12 +80,9 @@ def decode(population, data):
         for idHour, hour in enumerate(usedNurses):
             result += abs(hour - data['demand'][idHour]) * 50
 
-        result += workMinHours(ind['solution'], data['minHours']) * 30
-
-        result += consecutiveRests(ind['solution'], data) * 40
+        result += get_working_nurses(ind['solution']) * 20
 
         ind['fitness'] = result
-        # print(ind['fitness'])
     return population
 
 
@@ -211,3 +212,13 @@ def checkFeasible(solution, data):
 
     if not solution['feasible']:
         return
+
+
+def get_working_nurses(sol):
+    working_nurses = 0
+    for nurse in sol:
+        if all(h == 0 for h in nurse):
+            continue
+        working_nurses += 1
+
+    return working_nurses
