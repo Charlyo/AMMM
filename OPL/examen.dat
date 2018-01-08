@@ -1,0 +1,17 @@
+/*********************************************
+ * OPL 12.6.0.0 Data
+ * Author: oliveras
+ * Creation Date: Jun 8, 2017 at 11:46:35 AM
+ *********************************************/
+
+// A
+ numNurses = 20;
+ hours =  24;
+ demand = [ 2 2 1 1 1 2 2 3 4 6 6 7 5 8 8 7 6 6 4 3 4 3 3 3 ];
+ minHours = 5;
+ maxHours = 9;
+ maxConsec = 3;
+ 
+ // B
+ maxPresence = 14;
+  
