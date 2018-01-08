@@ -32,7 +32,7 @@ def generateMutantIndividuals(numMutants, chrLength):
                         'fitness': None})
     return mutants
 
- 
+
 def doCrossover(elite, nonelite, ro, numCrossover):
     crossover = []
     for i in range(numCrossover):

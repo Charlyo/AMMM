@@ -1,11 +1,12 @@
 # imports
 import math
 import matplotlib.pyplot as plt
-import pprint
+import sys
 import datetime
 
 import BRKGA as brkga  # BRKGA framework (problem independent)
-import DECODER_DUMMY as decoder  # Dgcoder algorithm (problem-dependent)
+# import DECODER_DUMMY as decoder  # Dgcoder algorithm (problem-dependent)
+import DECODER_CARLES as decoder
 # Input data (problem-dependent and instance-dependent)
 from DATA_DUMMY import data
 # Configuration parameters (problem-dependent and execution-dependent)
@@ -33,8 +34,10 @@ def main():
     i = 0
     while i < maxNumGenerations:
         population = decoder.decode(population, data)
-        print(i)
+
         bestfit = brkga.getBestFitness(population)['fitness']
+        if bestfit > 200 * (data['numNurses'] + 1):
+            bestfit = (data['numNurses'] + 1)
         evol.append(bestfit)
         if numElite > 0:
             elite, nonelite = brkga.classifyIndividuals(population, numElite)
@@ -74,13 +77,13 @@ def main():
     print('Assigned:      ' + str(usedNurses))
     print(bestIndividual['fitness'])
 
-    # plt.plot(evol)
-    # plt.xlabel('number of generations')
-    # plt.ylabel('Fitness of best individual')
-    # plt.axis([0, len(evol), 0, (chrLength + 1) * chrLength / 2])
-    # plt.show()
-    # print('End Time: {}'.format(datetime.datetime.now().strftime('%H:%M:%S')))
+    plt.plot(evol)
+    plt.xlabel('number of generations')
+    plt.ylabel('Fitness of best individual')
 
+    plt.show()
+
+    print('End Time: {}'.format(datetime.datetime.now().strftime('%H:%M:%S')))
     print(str(datetime.datetime.now() - start))
 
 
