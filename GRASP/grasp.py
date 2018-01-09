@@ -1,20 +1,24 @@
 # -*- coding: utf-8 -*-
-from DATA_DUMMY import data
 import pprint
 import copy
 import random
 import numpy as np
 from random import randint
+from DATA_DUMMY import orig, small, medium, large
 import sys
 
+data = None
 
 def grasp(alpha, maxIteration):
     bestSolution = {'gc': sys.maxint}
     iteration = 1
     infeasibleCounter = 0
-    while iteration <= maxIteration:
+    maxIt = maxIteration
+    while iteration <= maxIt:
         solution = construct(alpha)
+        
         if solution['feasible']:
+            maxIt /=2
             # if feasible => check for other solutions
             # bestNeighbour = local2(solution)
             bestNeighbour = solution
@@ -65,7 +69,7 @@ def construct(alpha):
             and len(candidates) > 0:
         greedyCost(candidates, solution, firstIteration, lastNurse, lastHour)
         candidates = list(
-            filter(lambda candidate: candidate['gc'] < 1000, candidates))
+            filter(lambda candidate: candidate['gc'] < sys.maxint, candidates))
         if len(candidates) == 0:
             break
         sortedCandidates = sorted(
@@ -207,13 +211,12 @@ def computeCandidateElements():
 
 
 def greedyCost(solutions, schedule, firstIteration, lastNurse, lastHour):
-    lambdaNewNurse = 100
-    lambdaMaxConsec = 1000
-    # lambdaMinHours = 100
-    lambdaMaxHours = 1000
-    lambdaMaxPresence = 1000
-    lambdaMaxRest = 100
-    lambdaDemandAdjustment = 10 # 50 / max(data['demand'])
+    lambdaNewNurse = max(data['demand'])*10
+    lambdaMaxConsec = sys.maxint
+    lambdaMaxHours = sys.maxint
+    lambdaMaxPresence = sys.maxint
+    lambdaMaxRest = max(data['demand'])*20
+    lambdaDemandAdjustment = 10
 
     for solution in solutions:
 
@@ -227,27 +230,37 @@ def greedyCost(solutions, schedule, firstIteration, lastNurse, lastHour):
         solution['gc'] = lambdaNewNurse * (nurseWorkedHours < 1)
 
         # Max hours
-        solution['gc'] += lambdaMaxHours * \
+        maxHoursConstraint = lambdaMaxHours * \
             ((nurseWorkedHours + 1) >
              min(data['maxHours'], data['maxPresence']))
+        if maxHoursConstraint != 0:
+            solution['gc'] = maxHoursConstraint
+            continue
 
         # Max Presence
-        solution['gc'] += lambdaMaxPresence * \
-            (computeMaxPresence(schedule, solution) > data['maxPresence'])
+        presence = computeMaxPresence(schedule, solution)
+        maxPresenceConstraint = lambdaMaxPresence * \
+            (presence > data['maxPresence'])
+        if maxPresenceConstraint != 0:
+            solution['gc'] = maxPresenceConstraint
+            continue
 
         # Max Consec
-        solution['gc'] += lambdaMaxConsec * \
+        maxConsecConstraint = lambdaMaxConsec * \
             (computeMaxConsec(schedule, solution) > data['maxConsec'])
+        if maxConsecConstraint != 0:
+            solution['gc'] = maxConsecConstraint
+            continue
 
         # MaxRest
-        solution['gc'] += lambdaMaxRest * \
-            (computeMaxRest(schedule, solution) > 1)
-
+        conditionMaxRest = (computeMaxRest(schedule, solution) > 1)
+        solution['gc'] += conditionMaxRest * lambdaMaxRest
         # Cost regarding hour demand
 
         maxRemainingDemand = [demand - assigned for demand,
                               assigned in zip(data['demand'],
                                               schedule['assignedNurses'])]
+        # avgRemainingDemand = sum(maxRemainingDemand) / len (maxRemainingDemand)
         solution['gc'] += lambdaDemandAdjustment * \
             (max(maxRemainingDemand) - maxRemainingDemand[solution['hour']])
 
@@ -275,7 +288,6 @@ def computeMaxRest(schedule, solution):
     restingHoursBetween = 0
     restingHoursBetween2 = 0
     nurseSchedule = schedule['schedule'][solution['nurse']]
-
     hour = solution['hour']
     while (hour < data['hours']):
         if nurseSchedule[hour] == 1:
@@ -288,7 +300,6 @@ def computeMaxRest(schedule, solution):
             restingHoursBetween2 = solution['hour'] - hour - 1
             break
         hour -= 1
-
     if (restingHoursBetween == 0 or restingHoursBetween2 == 0):
         return max(restingHoursBetween, restingHoursBetween2)
     return min(restingHoursBetween2, restingHoursBetween)
@@ -317,23 +328,6 @@ def computeMaxPresence(schedule, solution):
         return lastHour + 1 - solution['hour']
 
 
-def local2(solution):
-    initialRandomSolution = copy.deepcopy(solution)
-    initialRandomSolution = {'schedule': [[np.random.rand() > .5] * data['hours'] for i in range(
-        data['numNurses'])],
-        'gc': 0,
-        'feasible': True,
-        'assignedNurses': [0] * data['hours'],
-        'workedHours': [0] * data['numNurses']}
-    for idNurse, nurseSchedule in enumerate(solution['schedule']):
-        for idHour, worksInHour in enumerate(nurseSchedule):
-            initialRandomSolution['workedHours'][idNurse] += worksInHour
-            initialRandomSolution['assignedNurses'][idHour] += worksInHour
-    computeSolutionCost(initialRandomSolution)
-    print(initialRandomSolution)
-    return solution
-
-
 def local(solution):
     for idNurse, nurseSchedule in enumerate(solution['schedule']):
         for idHour, worksInHour in enumerate(nurseSchedule):
@@ -352,7 +346,27 @@ def local(solution):
 
 
 def main():
-    alpha = 0.0
+    if len(sys.argv) == 3:
+        alpha = 0.2
+        if float(sys.argv[2]) <= 1.0 and float(sys.argv[2]) >= 0.0: 
+            alpha = float(sys.argv[2])
+        if sys.argv[1] == 'data':
+            global data
+            data = orig
+        elif sys.argv[1] == 'small':
+            global data
+            data = small
+        elif sys.argv[1] == 'medium':
+            global data
+            data = medium
+        elif sys.argv[1] == 'large':
+            global data
+            data = large
+        else:
+            print 'Usage python grasp.py <data, small, medium, large> <alpha>'
+    else:
+        print 'Usage python grasp.py <data, small, medium, large> <alpha>'
+        exit()
     maxIte = 1000
     grasp(alpha, maxIte)
 
