@@ -1,0 +1,10 @@
+ numNurses = 40;
+ hours =  24;
+ 
+ demand = [15	14	12	15	8	4	11	3	14	8	6	8	4	5	3	7	15	0	9	3	8	0	2	15];
+ minHours = 0;
+ maxHours = 10;
+ maxConsec = 5;
+ 
+ // B
+ maxPresence = 14;
